@@ -1,68 +1,41 @@
 # -*- coding: utf-8 -*-
 """
-Парсер списку продуктів від користувача.
-Формати: "продукт кількість од", "продукт - кількість од"
-Одиниці: шт, штук, г, грам, кг, мл
+Парсер списку продуктів від користувача (лише назви, без кількостей).
+Розділювачі: кома, крапка з комою, перенос рядка.
+Підтримуються слова латиницею та кирилицею (див. INGREDIENT_ALIASES у recipes).
 """
 import re
+
+from recipes import normalize_ingredient
 
 
 def parse_products(text: str) -> dict:
     """
-    Парсить текст від користувача у словник {продукт: (кількість, одиниця)}.
-    Приклади:
-      "яйця 3 шт, молоко 200 г" -> {"яйця": (3, "шт"), "молоко": (200, "г")}
-      "борошно 300г помідори 2шт" -> {"борошно": (300, "г"), "помідори": (2, "шт")}
+    Повертає словник {канонічна_назва: (1.0, "шт")} для розпізнаних інгредієнтів.
+    Приклад: "помідор, капуста, milk, rice" → {"помідори": (1.0, "шт"), ...}
     """
-    result = {}
-    text = text.strip()
+    result: dict[str, tuple[float, str]] = {}
+    text = (text or "").strip()
+    if not text:
+        return result
 
-    # Патерни для різних форматів
-    # 1) "продукт число од" або "продукт числоод"
-    patterns = [
-        # кома/перенос як роздільник
-        r"([а-яіїєґ'\-\s]+?)\s*[-–]?\s*(\d+(?:[.,]\d+)?)\s*(шт|штук|штуки|г|грам|кг|мл)\b",
-        r"([а-яіїєґ'\-\s]+?)\s*(\d+(?:[.,]\d+)?)\s*(шт|штук|штуки|г|грам|кг|мл)\b",
-    ]
+    def add_norm(norm: str | None) -> None:
+        if norm and len(norm) > 1:
+            result[norm] = (1.0, "шт")
 
-    # Нормалізація одиниць
-    def norm_unit(u):
-        u = u.lower()
-        if u in ("шт", "штук", "штуки"):
-            return "шт"
-        if u in ("г", "грам", "грамів"):
-            return "г"
-        if u == "кг":
-            return "г"  # переводимо в грами * 1000 нижче
-        if u == "мл":
-            return "мл"
-        return "г"
+    for raw in re.split(r"[\n,;]+", text):
+        chunk = raw.strip().strip(" \t.")
+        if not chunk:
+            continue
+        whole = normalize_ingredient(chunk)
+        if whole:
+            add_norm(whole)
+            continue
+        for token in re.findall(r"[a-zа-яіїєґ'\-]+", chunk.lower()):
+            add_norm(normalize_ingredient(token))
 
-    for pattern in patterns:
-        for m in re.finditer(pattern, text, re.IGNORECASE):
-            name = m.group(1).strip()
-            qty = float(m.group(2).replace(",", "."))
-            unit = norm_unit(m.group(3))
-            if unit == "г" and m.group(3).lower() == "кг":
-                qty *= 1000
-            name = name.strip(" ,\t-–:")
-            if len(name) > 1:
-                result[name] = (qty, unit)
-
-    # Альтернативний формат: кожен рядок "продукт кількість"
     if not result:
-        lines = re.split(r"[\n,;]+", text)
-        for line in lines:
-            line = line.strip()
-            # "продукт 123 од"
-            m = re.search(r"^(.+?)\s+(\d+(?:[.,]\d+)?)\s*(шт|штук|г|грам|кг|мл)?\s*$", line, re.IGNORECASE)
-            if m:
-                name = m.group(1).strip()
-                qty = float(m.group(2).replace(",", "."))
-                unit = norm_unit(m.group(3) or "г")
-                if m.group(3) and "кг" in (m.group(3) or "").lower():
-                    qty *= 1000
-                if len(name) > 1:
-                    result[name] = (qty, unit)
+        for token in re.findall(r"[a-zа-яіїєґ'\-]+", text.lower()):
+            add_norm(normalize_ingredient(token))
 
     return result
