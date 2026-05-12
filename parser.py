@@ -1,27 +1,30 @@
 # -*- coding: utf-8 -*-
 """
 Парсер списку продуктів від користувача (лише назви, без кількостей).
-Розділювачі: кома, крапка з комою, перенос рядка.
-Підтримуються слова латиницею та кирилицею (див. INGREDIENT_ALIASES у recipes).
+Повертає словник для підбору рецептів та впорядкований список ключів (перше входження).
 """
 import re
 
 from recipes import normalize_ingredient
 
 
-def parse_products(text: str) -> dict:
+def parse_products(text: str) -> tuple[dict[str, tuple[float, str]], list[str]]:
     """
-    Повертає словник {канонічна_назва: (1.0, "шт")} для розпізнаних інгредієнтів.
-    Приклад: "помідор, капуста, milk, rice" → {"помідори": (1.0, "шт"), ...}
+    Повертає (products, order), де products — {канонічна_назва: (1.0, "шт")},
+    order — порядок першого розпізнавання (для відображення користувачу).
     """
     result: dict[str, tuple[float, str]] = {}
+    order: list[str] = []
     text = (text or "").strip()
     if not text:
-        return result
+        return result, order
 
     def add_norm(norm: str | None) -> None:
-        if norm and len(norm) > 1:
-            result[norm] = (1.0, "шт")
+        if not norm or len(norm) <= 1:
+            return
+        if norm not in result:
+            order.append(norm)
+        result[norm] = (1.0, "шт")
 
     for raw in re.split(r"[\n,;]+", text):
         chunk = raw.strip().strip(" \t.")
@@ -38,4 +41,4 @@ def parse_products(text: str) -> dict:
         for token in re.findall(r"[a-zа-яіїєґ'\-]+", text.lower()):
             add_norm(normalize_ingredient(token))
 
-    return result
+    return result, order

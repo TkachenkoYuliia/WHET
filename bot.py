@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Telegram бот WeT — меню на день з продуктів у холодильнику (UK / EN).
+Telegram бот WHET — меню на день з продуктів у холодильнику (UK / EN).
 """
 import html
 import os
@@ -14,7 +14,9 @@ from recipes import (
     get_recipes_by_ingredients,
     generate_menu_variants,
     RECIPES,
+    ingredient_display,
     ingredient_keys_formatted,
+    recipe_body,
     recipe_title,
 )
 
@@ -34,26 +36,32 @@ TEXT = {
     "uk": {
         "welcome": (
             "Привіт, <b>{name}</b>! 👋\n\n"
-            "Я бот <b>WeT</b> — допоможу скласти збалансоване меню на день з продуктів, "
+            "Я бот <b>WHET</b> — допоможу скласти збалансоване меню на день з продуктів, "
             "які ти маєш.\n\n"
             "Напиши список <b>назв продуктів</b> (без кількості), через кому або з нового рядка.\n"
             "Наприклад:\n"
             "<code>помідор, капуста, молоко, борошно, рис, банан, вівсянка, цукор</code>\n\n"
-            "Кнопка «Інгредієнти WHET» показує розпізнавані назви."
+            "Кнопка «Інгредієнти WHET» показує розпізнавані назви. Мову можна змінити кнопкою «Мова»."
         ),
         "help": (
             "ℹ️ <b>Допомога</b>\n\n"
-            "1️⃣ Натисни «Додати продукти» або напиши список назв продуктів "
+            "1️⃣ Натисни «Додати продукти» або надішли список <b>назв інгредієнтів</b> "
             "(через кому або з нового рядка), <b>без кількості</b>.\n\n"
-            "2️⃣ Натисни «Згенерувати меню» — отримаєш 3 варіанти меню на день.\n\n"
-            "3️⃣ Обери варіант — побачиш список страв.\n\n"
-            "4️⃣ Натисни на страву — отримаєш повний рецепт.\n\n"
+            "2️⃣ Натисни «Згенерувати меню» — отримаєш 3 варіанти меню (сніданок, обід, вечеря або десерт).\n\n"
+            "3️⃣ Обери варіант — з’явиться список страв.\n\n"
+            "4️⃣ Натисни на страву — бот надішле повний рецепт <b>українською</b>.\n\n"
+            "5️⃣ «Інгредієнти WHET» — перелік продуктів, які бот розуміє (є синоніми та англійські назви).\n\n"
+            "6️⃣ «Мова» — перемикання між українською та англійською: підказки, меню та "
+            "<b>англійські рецепти</b>, якщо обрано English.\n\n"
             "Приклад:\n<code>яйця, молоко, борошно, сир, помідори</code>"
         ),
         "btn_add": "📋 Додати продукти",
         "btn_gen": "🍽 Згенерувати меню",
         "btn_help": "ℹ️ Допомога",
         "btn_ingredients": "Інгредієнти WHET",
+        "btn_lang": "🌐 Мова",
+        "lang_changed": "✅ Мову змінено. Усі наступні повідомлення — обраною мовою.",
+        "lang_same": "Ця мова вже обрана.",
         "add_products_prompt": (
             "📋 Напиши список <b>назв продуктів</b> (без кількості).\n"
             "Через кому, крапку з комою або з нового рядка.\n\n"
@@ -69,7 +77,7 @@ TEXT = {
         "menu_variant": "Варіант {i}: {b} / {l} / {d}",
         "meal_breakfast": "Сніданок",
         "meal_lunch": "Обід",
-        "meal_dinner": "Вечеря",
+        "meal_dinner": "Вечеря / десерт",
         "menu_your_day": "🍽 <b>Ваше меню на день:</b>\n\n",
         "menu_tap_dish": "\n\nНатисніть на страву, щоб отримати рецепт 👇",
         "products_saved": "✅ Продукти збережено:\n",
@@ -80,31 +88,36 @@ TEXT = {
             "Приклад:\n<code>молоко, яйця, борошно, цукор</code>"
         ),
         "idle_hint": "Напиши список продуктів або скористайся кнопками меню.",
-        "ingredients_title": "🥄 <b>Інгредієнти WHET</b> (канонічні назви, які бот розпізнає):",
-        "ingredients_footer": "\n\nТакож підходять синоніми та англійські назви зі словника аліасів.",
+        "ingredients_title": "🥄 <b>Інгредієнти WHET</b> (назви для відображення у вашій мові):",
+        "ingredients_footer": "\n\nТакож підходять синоніми та англійські відповідники зі словника.",
     },
     "en": {
         "welcome": (
             "Hi, <b>{name}</b>! 👋\n\n"
-            "I'm the <b>WeT</b> bot — I'll help you plan a balanced day from what you have.\n\n"
+            "I'm the <b>WHET</b> bot — I'll help you plan a balanced day from what you have.\n\n"
             "Send a list of <b>ingredient names</b> (no amounts), separated by commas or new lines.\n"
             "Example:\n"
             "<code>tomato, cabbage, milk, flour, rice, banana, oats, sugar</code>\n\n"
-            "Use “WHET Ingredients” to see recognized names."
+            "Use “WHET Ingredients” for recognized names. Use “Language” to switch UI and recipe language."
         ),
         "help": (
             "ℹ️ <b>Help</b>\n\n"
-            "1️⃣ Tap “Add products” or send a list of ingredient names "
+            "1️⃣ Tap “Add products” or send a list of <b>ingredient names</b> "
             "(comma or new line), <b>without amounts</b>.\n\n"
-            "2️⃣ Tap “Generate menu” — you'll get 3 daily menu options.\n\n"
-            "3️⃣ Pick an option — you'll see the dishes.\n\n"
-            "4️⃣ Tap a dish — you'll get the full recipe.\n\n"
+            "2️⃣ Tap “Generate menu” — you'll get 3 daily options (breakfast, lunch, dinner or dessert).\n\n"
+            "3️⃣ Pick an option to see the dishes.\n\n"
+            "4️⃣ Tap a dish — the bot sends the full recipe in <b>English</b> while English is selected.\n\n"
+            "5️⃣ “WHET Ingredients” lists what the bot understands (synonyms included).\n\n"
+            "6️⃣ “Language” switches Ukrainian / English for prompts, menus, saved product labels, and recipes.\n\n"
             "Example:\n<code>eggs, milk, flour, cheese, tomatoes</code>"
         ),
         "btn_add": "📋 Add products",
         "btn_gen": "🍽 Generate menu",
         "btn_help": "ℹ️ Help",
         "btn_ingredients": "🥄 WHET Ingredients",
+        "btn_lang": "🌐 Language",
+        "lang_changed": "✅ Language updated. Further messages will use your choice.",
+        "lang_same": "This language is already selected.",
         "add_products_prompt": (
             "📋 Send a list of <b>ingredient names</b> (no amounts).\n"
             "Separate with commas, semicolons, or new lines.\n\n"
@@ -120,7 +133,7 @@ TEXT = {
         "menu_variant": "Option {i}: {b} / {l} / {d}",
         "meal_breakfast": "Breakfast",
         "meal_lunch": "Lunch",
-        "meal_dinner": "Dinner",
+        "meal_dinner": "Dinner / dessert",
         "menu_your_day": "🍽 <b>Your menu for the day:</b>\n\n",
         "menu_tap_dish": "\n\nTap a dish for the full recipe 👇",
         "products_saved": "✅ Saved products:\n",
@@ -131,8 +144,8 @@ TEXT = {
             "Example:\n<code>milk, eggs, flour, sugar</code>"
         ),
         "idle_hint": "Send a product list or use the menu buttons.",
-        "ingredients_title": "🥄 <b>WHET Ingredients</b> (canonical names the bot understands):",
-        "ingredients_footer": "\n\nSynonyms and English aliases from the dictionary also work.",
+        "ingredients_title": "🥄 <b>WHET Ingredients</b> (labels in your language):",
+        "ingredients_footer": "\n\nSynonyms and dictionary aliases also work.",
     },
 }
 
@@ -145,9 +158,12 @@ def get_state(chat_id):
             "step": "choose_lang",
             "lang": None,
             "products": {},
+            "product_order": [],
             "variants": [],
             "chosen": None,
         }
+    if "product_order" not in user_state[chat_id]:
+        user_state[chat_id]["product_order"] = []
     return user_state[chat_id]
 
 
@@ -156,6 +172,7 @@ def main_menu_keyboard(lang: str):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add(types.KeyboardButton(t["btn_add"]), types.KeyboardButton(t["btn_gen"]))
     markup.add(types.KeyboardButton(t["btn_help"]), types.KeyboardButton(t["btn_ingredients"]))
+    markup.add(types.KeyboardButton(t["btn_lang"]))
     return markup
 
 
@@ -167,6 +184,7 @@ def _lang_ok(s) -> bool:
 def callback_choose_language(callback):
     lang = "uk" if callback.data == "lang_uk" else "en"
     s = get_state(callback.message.chat.id)
+    prev = s.get("lang")
     s["lang"] = lang
     s["step"] = "idle"
     bot.answer_callback_query(callback.id)
@@ -179,8 +197,17 @@ def callback_choose_language(callback):
     except Exception:
         pass
     fn = callback.from_user.first_name or ("User" if lang == "en" else "Користувач")
-    msg = TEXT[lang]["welcome"].format(name=html.escape(fn))
-    bot.send_message(callback.message.chat.id, msg, reply_markup=main_menu_keyboard(lang))
+    if prev is None:
+        msg = TEXT[lang]["welcome"].format(name=html.escape(fn))
+        bot.send_message(callback.message.chat.id, msg, reply_markup=main_menu_keyboard(lang))
+    elif prev != lang:
+        bot.send_message(callback.message.chat.id, TEXT[lang]["lang_changed"], reply_markup=main_menu_keyboard(lang))
+    else:
+        bot.send_message(
+            callback.message.chat.id,
+            TEXT[lang]["lang_same"],
+            reply_markup=main_menu_keyboard(lang),
+        )
 
 
 @bot.message_handler(commands=["start"])
@@ -189,6 +216,7 @@ def cmd_start(message):
     s["step"] = "choose_lang"
     s["lang"] = None
     s["products"] = {}
+    s["product_order"] = []
     s["variants"] = []
     s["chosen"] = None
     markup = types.InlineKeyboardMarkup()
@@ -221,6 +249,24 @@ def btn_help(message):
     cmd_help(message)
 
 
+@bot.message_handler(func=lambda m: m.text in (TEXT["uk"]["btn_lang"], TEXT["en"]["btn_lang"]))
+def btn_language(message):
+    s = get_state(message.chat.id)
+    if not _lang_ok(s):
+        bot.send_message(message.chat.id, CHOOSE_LANG_FIRST)
+        return
+    markup = types.InlineKeyboardMarkup()
+    markup.row(
+        types.InlineKeyboardButton("Українська", callback_data="lang_uk"),
+        types.InlineKeyboardButton("English", callback_data="lang_en"),
+    )
+    bot.send_message(
+        message.chat.id,
+        "Оберіть мову / <b>Choose language</b>",
+        reply_markup=markup,
+    )
+
+
 @bot.message_handler(
     func=lambda m: m.text in (TEXT["uk"]["btn_ingredients"], TEXT["en"]["btn_ingredients"])
 )
@@ -230,7 +276,7 @@ def btn_ingredients(message):
         bot.send_message(message.chat.id, CHOOSE_LANG_FIRST)
         return
     lang = s["lang"]
-    body = TEXT[lang]["ingredients_title"] + "\n\n" + ingredient_keys_formatted()
+    body = TEXT[lang]["ingredients_title"] + "\n\n" + ingredient_keys_formatted(lang)
     body += TEXT[lang]["ingredients_footer"]
     bot.send_message(message.chat.id, body, reply_markup=main_menu_keyboard(lang))
 
@@ -245,7 +291,10 @@ def btn_add_products(message):
     s["step"] = "waiting_products"
     extra = ""
     if s["products"]:
-        extra = TEXT[lang]["current_list_prefix"] + ", ".join(s["products"].keys())
+        extra = TEXT[lang]["current_list_prefix"] + "\n".join(
+            f"• {ingredient_display(k, lang)}" for k in (s["product_order"] or list(s["products"].keys()))
+            if k in s["products"]
+        )
     bot.send_message(
         message.chat.id,
         TEXT[lang]["add_products_prompt"] + extra,
@@ -333,7 +382,9 @@ def callback_recipe(callback):
     if not recipe:
         bot.answer_callback_query(callback.id)
         return
-    bot.send_message(callback.message.chat.id, recipe["recipe"])
+    s = get_state(callback.message.chat.id)
+    lang = s["lang"] if _lang_ok(s) else "uk"
+    bot.send_message(callback.message.chat.id, recipe_body(recipe, lang))
     bot.answer_callback_query(callback.id)
 
 
@@ -348,23 +399,29 @@ def handle_text(message):
     lang = s["lang"]
 
     if s["step"] == "waiting_products":
-        products = parse_products(message.text)
+        products, order = parse_products(message.text)
         if not products:
             bot.send_message(message.chat.id, TEXT[lang]["parse_fail"])
             return
 
         s["products"] = products
+        s["product_order"] = order
         s["step"] = "idle"
-        text = TEXT[lang]["products_saved"] + "\n".join(f"• {k}" for k in products.keys())
+        text = TEXT[lang]["products_saved"] + "\n".join(
+            f"• {ingredient_display(k, lang)}" for k in order
+        )
         bot.send_message(message.chat.id, text, reply_markup=main_menu_keyboard(lang))
         bot.send_message(message.chat.id, TEXT[lang]["gen_menu_hint"], reply_markup=main_menu_keyboard(lang))
         return
 
-    products = parse_products(message.text)
+    products, order = parse_products(message.text)
     if products:
         s["products"] = products
+        s["product_order"] = order
         s["step"] = "idle"
-        text = TEXT[lang]["products_saved"] + "\n".join(f"• {k}" for k in products.keys())
+        text = TEXT[lang]["products_saved"] + "\n".join(
+            f"• {ingredient_display(k, lang)}" for k in order
+        )
         bot.send_message(message.chat.id, text, reply_markup=main_menu_keyboard(lang))
         bot.send_message(message.chat.id, TEXT[lang]["gen_menu_hint_short"], reply_markup=main_menu_keyboard(lang))
     else:
@@ -376,7 +433,7 @@ def handle_text(message):
 
 
 def run():
-    print("Бот WeT запущено...")
+    print("Бот WHET запущено...")
     bot.infinity_polling()
 
 
